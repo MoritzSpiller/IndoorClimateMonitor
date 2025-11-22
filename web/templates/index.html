@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sensor Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
+        .controls { background: white; padding: 15px; border-radius: 8px; display: flex; gap: 15px; align-items: center; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .chart-container { background: white; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); height: 300px; }
+        select, input, button { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        button { background: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+
+    <h2>Room Climate Data</h2>
+
+    <div class="controls">
+        <div>
+            <label>Reference Date:</label>
+            <input type="date" id="datePicker">
+        </div>
+        <div>
+            <label>Time Frame:</label>
+            <select id="timeRange">
+                <option value="6h">Last 6 Hours</option>
+                <option value="12h">Last 12 Hours</option>
+                <option value="24h" selected>Last 24 Hours</option>
+                <option value="3d">Last 3 Days</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="1m">Last 1 Month</option>
+            </select>
+        </div>
+        <button onclick="fetchData()">Update Charts</button>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="envChart"></canvas>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="battChart"></canvas>
+    </div>
+
+    <script>
+        // Initialize Defaults
+        document.getElementById('datePicker').valueAsDate = new Date();
+        
+        let envChartInstance = null;
+        let battChartInstance = null;
+
+        async function fetchData() {
+            const date = document.getElementById('datePicker').value;
+            const range = document.getElementById('timeRange').value;
+
+            // Call Python Backend
+            const response = await fetch(`/api/get_readings?date=${date}&range=${range}`);
+            const data = await response.json();
+
+            updateCharts(data);
+        }
+
+        function updateCharts(rawData) {
+            // Parse Data for Chart.js
+            const labels = rawData.map(d => d.ts);
+            const temps = rawData.map(d => d.temperature_c);
+            const hums = rawData.map(d => d.humidity_rh);
+            const battery = rawData.map(d => d.battery_percentage);
+
+            // 1. Create/Update Environmental Chart
+            const ctxEnv = document.getElementById('envChart').getContext('2d');
+            
+            if (envChartInstance) envChartInstance.destroy(); // Reset if exists
+
+            envChartInstance = new Chart(ctxEnv, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Temperature (°C)',
+                            data: temps,
+                            borderColor: '#ff6384',
+                            backgroundColor: '#ff6384',
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'Humidity (%RH)',
+                            data: hums,
+                            borderColor: '#36a2eb',
+                            backgroundColor: '#36a2eb',
+                            yAxisID: 'y1', 
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { type: 'time', time: { unit: 'hour' } },
+                        y: { 
+                            type: 'linear', 
+                            display: true, 
+                            position: 'left',
+                            title: { display: true, text: 'Temperature' }
+                        },
+                        y1: { 
+                            type: 'linear', 
+                            display: true, 
+                            position: 'right',
+                            grid: { drawOnChartArea: false }, // remove grid lines for clarity
+                            title: { display: true, text: 'Humidity' }
+                        }
+                    }
+                }
+            });
+
+            // 2. Create/Update Battery Chart
+            const ctxBatt = document.getElementById('battChart').getContext('2d');
+            
+            if (battChartInstance) battChartInstance.destroy();
+
+            battChartInstance = new Chart(ctxBatt, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Battery (%)',
+                        data: battery,
+                        borderColor: '#4bc0c0',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { type: 'time', time: { unit: 'hour' } },
+                        y: { min: 0, max: 100 }
+                    }
+                }
+            });
+        }
+
+        // Load data on first page load
+        fetchData();
+    </script>
+</body>
+</html>

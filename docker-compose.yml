@@ -1,0 +1,23 @@
+version: '3'
+services:
+  # --- SERVICE 1: The Data Collector ---
+  sensor-collector:
+    build: ./collector
+    container_name: pi_collector
+    restart: unless-stopped
+    # CRITICAL: Give container access to Pi Hardware (GPIO/I2C)
+    privileged: true
+    volumes:
+      # Map the internal script's output to the host folder
+      - ./data:/app/data
+
+  # --- SERVICE 2: The Web Dashboard ---
+  web-dashboard:
+    build: ./web
+    container_name: pi_dashboard
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      # Map the SAME host folder to this container so it can read the files
+      - ./data:/app/data
